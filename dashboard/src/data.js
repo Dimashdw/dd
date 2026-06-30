@@ -87,19 +87,24 @@ window.DASH = (function () {
   function monKey(dt){return dt.getFullYear()*12+dt.getMonth();}
   function monLabel(y,m){return MON[m]+" "+y;}
 
+  // РЕАЛЬНЫЕ данные из Meta Ads (real-data.js), если подключены
+  var R = (typeof window !== "undefined" && window.__QALAN_REAL__) ? window.__QALAN_REAL__ : null;
+  function parseISO(s){ var p=s.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+
   var PERIOD_DAYS = 182;
-  var END = new Date(2026, 5, 20);            // 20 июн 2026 (ученик поправит)
-  var START = new Date(END.getTime() - (PERIOD_DAYS - 1) * 86400000);
+  var END = R ? parseISO(R.end) : new Date(2026, 5, 20);
+  var START = R ? parseISO(R.start) : new Date(END.getTime() - (PERIOD_DAYS - 1) * 86400000);
 
   /* ── ЛЕСТНИЦА ПРОДУКТОВ Qalan по длительности подписки (цены ₸ — плейсхолдер) ── */
+  // Цены в USD (аккаунт биллится в $). Это ПЛЕЙСХОЛДЕР — поставь реальные тарифы Qalan.
   var products = [
-    { code:"П1", name:"Бонус-задачи", sub:"трипваер с квиза", price:2000,  color:"var(--spend)" },
-    { code:"П2", name:"Месяц",        sub:"подписка 1 мес",   price:9900,  color:"var(--ai)"    },
-    { code:"П3", name:"3 месяца",     sub:"подписка 3 мес",   price:24900, color:"var(--money)" },
-    { code:"П4", name:"Год",          sub:"подписка 12 мес",  price:79900, color:"var(--warn)"  }
+    { code:"П1", name:"Бонус-задачи", sub:"трипваер с квиза", price:4,   color:"var(--spend)" },
+    { code:"П2", name:"Месяц",        sub:"подписка 1 мес",   price:20,  color:"var(--ai)"    },
+    { code:"П3", name:"3 месяца",     sub:"подписка 3 мес",   price:50,  color:"var(--money)" },
+    { code:"П4", name:"Год",          sub:"подписка 12 мес",  price:170, color:"var(--warn)"  }
   ];
 
-  var FX_USD = 480;       // курс ₸/$ (плейсхолдер; для справочной колонки $)
+  var FX_USD = 1;         // оплаты-плейсхолдер уже в $ (аккаунт в USD)
   var MARGIN = 1;         // маржа продукта (плейсхолдер; напр. 0.7)
   var LTV_K = 1.7;        // коэффициент LTV
 
@@ -156,21 +161,25 @@ window.DASH = (function () {
 
   /* ── daily: массив дней периода ──────────────────────────────────────── */
   var daily = [];
-  for (var di = 0; di < PERIOD_DAYS; di++) {
-    var dt = new Date(START.getTime() + di * 86400000);
-    var isoD = iso(dt);
-    daily.push({
-      i: di,
-      date: isoD,
-      dmy: dmy(dt),
-      label: ruShort(dt),
-      month: monKey(dt),
-      spend: 1,          // плейсхолдер «$1 в день» (заменит выгрузка)
-      income: incomeByDate[isoD] || 0,   // доход из оплат, не из рекламы
-      leads: 1,
-      clicks: 1,
-      impressions: 1
+  if (R) {
+    // РЕАЛЬНЫЕ дни из Meta (spend/leads/clicks/impr); income — из оплат (заглушка)
+    R.daily.forEach(function (d, di) {
+      var dt = parseISO(d.date);
+      daily.push({
+        i: di, date: d.date, dmy: dmy(dt), label: ruShort(dt), month: monKey(dt),
+        spend: d.spend, income: incomeByDate[d.date] || 0,
+        leads: d.leads, clicks: d.clicks, impressions: d.impr
+      });
     });
+  } else {
+    for (var di = 0; di < PERIOD_DAYS; di++) {
+      var dt = new Date(START.getTime() + di * 86400000);
+      var isoD = iso(dt);
+      daily.push({
+        i: di, date: isoD, dmy: dmy(dt), label: ruShort(dt), month: monKey(dt),
+        spend: 1, income: incomeByDate[isoD] || 0, leads: 1, clicks: 1, impressions: 1
+      });
+    }
   }
 
   /* ── тоталы ──────────────────────────────────────────────────────────── */
@@ -229,31 +238,46 @@ window.DASH = (function () {
     });
   }
 
-  // geo: 7 городов Казахстана (плейсхолдер; ученик заменит)
-  var geo = buildSlice(["Алматы","Астана","Шымкент","Караганда","Актобе","Тараз","Павлодар"]);
+  // geo: реальные регионы Казахстана из Meta (revenue/customers — заглушка, в рекламе их нет)
+  var geo;
+  if (R) {
+    geo = R.geo.map(function (g) {
+      return { name: g.name, spend: g.spend, leads: g.leads, customers: 0, revenue: 0,
+               cpl: safeDiv(g.spend, g.leads), cac: 0, aov: 0, roas: 0 };
+    });
+  } else {
+    geo = buildSlice(["Алматы","Астана","Шымкент","Караганда","Актобе","Тараз","Павлодар"]);
+  }
 
-  // segments: РОВНО 4 — по классу ребёнка (плейсхолдер; ученик заменит)
+  // segments: РОВНО 4 — по классу ребёнка. Meta НЕ разбивает по классу → плейсхолдер.
   var segments = buildSlice(["1–4 класс","5–7 класс","8–9 класс","10–11 класс"]);
 
-  // creatives: РОВНО 24 (имена = метки utm_content, формат по кругу)
-  var creativeNames = [];
-  for (var ci = 0; ci < 24; ci++) {
-    var launch = new Date(START.getTime() + Math.round((PERIOD_DAYS - 20) * ci / 24) * 86400000);
-    creativeNames.push({
-      name: CREATIVE_NAMES[ci],
-      format: FORMATS[ci % 4],
-      launch: iso(launch),
-      launchLabel: ruShort(launch),
-      ageDays: Math.round((END - launch) / 86400000)
+  // creatives: реальные объявления из Meta (имя=ad name; revenue/roas — заглушка)
+  var creatives;
+  if (R) {
+    creatives = R.creatives.map(function (c) {
+      var lz = parseISO(c.launch);
+      return { name: c.name, format: c.format, launch: c.launch, launchLabel: ruShort(lz),
+               ageDays: Math.round((END - lz) / 86400000),
+               spend: c.spend, leads: c.leads, clicks: c.clicks || 0, impressions: c.impr || 0,
+               customers: 0, revenue: 0, cpl: safeDiv(c.spend, c.leads), cac: 0, aov: 0, roas: 0,
+               status: c.spend > 0 ? "льём" : "пауза" };
+    });
+  } else {
+    var creativeNames = [];
+    for (var ci = 0; ci < 24; ci++) {
+      var launch = new Date(START.getTime() + Math.round((PERIOD_DAYS - 20) * ci / 24) * 86400000);
+      creativeNames.push({ name: CREATIVE_NAMES[ci], format: FORMATS[ci % 4],
+        launch: iso(launch), launchLabel: ruShort(launch), ageDays: Math.round((END - launch) / 86400000) });
+    }
+    creatives = buildSlice(creativeNames).map(function (c) {
+      c.status = c.roas >= 1 ? "льём" : (c.spend > 0 ? "тест" : "пауза"); return c;
     });
   }
-  var creatives = buildSlice(creativeNames).map(function (c) {
-    c.status = c.roas >= 1 ? "льём" : (c.spend > 0 ? "тест" : "пауза");
-    return c;
-  });
 
-  // formats: сводка по форматам
-  var formats = FORMATS.map(function (f) {
+  // formats: сводка по форматам (по реальным/шаблонным креативам)
+  var fmtSet = {}; creatives.forEach(function (c) { fmtSet[c.format] = 1; });
+  var formats = Object.keys(fmtSet).map(function (f) {
     var list = creatives.filter(function (c) { return c.format === f; });
     var sp = list.reduce(function (s, c) { return s + c.spend; }, 0);
     var rv = list.reduce(function (s, c) { return s + c.revenue; }, 0);
@@ -400,8 +424,8 @@ window.DASH = (function () {
     project: "Qalan",
     period: { start: iso(START), end: iso(END), startLabel: ruShort(START), endLabel: ruShort(END) },
     months: monthly.length,
-    currency: "₸", cur: "₸",
-    source: "Meta Ads → квиз → CRM",
+    currency: R ? (R.currency || "$") : "₸", cur: R ? (R.currency || "$") : "₸",
+    source: R ? (R.source || "Meta Ads") : "Meta Ads → квиз → CRM",
     attribution: "по utm_content (креатив) из квиза → CRM",
     incomeIsPlaceholder: incomeIsPlaceholder,
     fxUsd: FX_USD,

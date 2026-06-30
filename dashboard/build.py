@@ -34,6 +34,9 @@ def main():
     data_js = read(os.path.join(SRC, "data.js"))
     charts_js = read(os.path.join(SRC, "charts.js"))
     ui_js = read(os.path.join(SRC, "ui.js"))
+    # real-data.js — реальные цифры из Meta (опционально; если нет — шаблон на заглушках)
+    real_path = os.path.join(SRC, "real-data.js")
+    real_js = read(real_path) if os.path.exists(real_path) else None
 
     # 1) <link rel="stylesheet" href="../theme.css"> -> <style>…</style>
     link_pat = re.compile(r'<link[^>]*href="\.\./theme\.css"[^>]*>')
@@ -50,6 +53,11 @@ def main():
         repl = "<script>\n" + protect_script_close(content) + "\n</script>"
         html = pat.sub(lambda m: repl, html)
 
+    if real_js is not None:
+        inline_script("real-data.js", real_js)
+    else:
+        # тег есть в шаблоне, но файла нет — убираем тег, чтобы не было битой ссылки
+        html = re.sub(r'<script[^>]*src="\.\./real-data\.js"[^>]*>\s*</script>\s*', "", html)
     inline_script("data.js", data_js)
     inline_script("charts.js", charts_js)
     inline_script("ui.js", ui_js)
