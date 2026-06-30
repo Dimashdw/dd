@@ -36,11 +36,14 @@ window.CH = (function () {
     if (a >= 1e3) return ru(n / 1e3, 1).replace(/,0$/, "") + "k";
     return ru(n, 0);
   }
-  function usd(n, d){ return "$" + ru(n, d); }
-  function usdC(n){ return "$" + compact(n); }
+  var CUR = "$";                          // символ валюты (ui.js ставит из DASH.meta.cur)
+  function setCur(s){ CUR = s || "$"; }
+  // $ — префиксом, прочие валюты (₸/₽/€) — суффиксом, как принято локально
+  function usd(n, d){ return CUR === "$" ? "$" + ru(n, d) : ru(n, d) + " " + CUR; }
+  function usdC(n){ return CUR === "$" ? "$" + compact(n) : compact(n) + " " + CUR; }
   function pct(n, d){ if(n==null||!isFinite(n))return "—"; return ru(n, d==null?1:d) + "%"; }
   function x(n){ if(n==null||!isFinite(n))return "—"; return ru(n, 2) + "×"; }
-  var fmt = { ru:ru, compact:compact, usd:usd, usdC:usdC, pct:pct, x:x };
+  var fmt = { ru:ru, compact:compact, usd:usd, usdC:usdC, pct:pct, x:x, setCur:setCur };
 
   function svg(w, h, inner, extra) {
     return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" ' +

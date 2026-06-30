@@ -15,6 +15,16 @@
    ad-части из файла income можно оставить заглушкой ($1-набор) — дашборд считает
    что может (расход, CPL, лиды, гео по расходу), а ROAS/когорты оживут с оплатами.
    Несколько месяцев = несколько выгрузок: склеиваются в один daily по датам.
+
+   АТРИБУЦИЯ ПРОДАЖИ → КРЕАТИВУ (воронка Qalan: клик → квиз → менеджер → оплата).
+   Продажа закрывается ОФФЛАЙН (менеджер), поэтому метку креатива тащим по цепочке:
+     1) Meta, объявление → «Параметры URL»:
+        utm_content={{ad.name}}  (имя креатива подставит сама Meta), + ad_id={{ad.id}}
+     2) Квиз-сайт читает utm из URL и кладёт в скрытые поля формы (см. README).
+     3) CRM: заявка приходит с креативом; менеджер закрывает оплату — креатив уже стоит.
+     4) Здесь: payments[].creative = это utm_content. Так оживают лидерборд креативов,
+        ROAS по креативу и «с какого креатива пришла каждая продажа».
+   Имена креативов делай системными/читаемыми — они = метка везде (drobi_5kl_video_v1).
    ЗАПОЛНЕНИЕ = замена массива daily и списков-разрезов. Структуру не трогать.
    ============================================================================ */
 window.DASH = (function () {
@@ -81,23 +91,37 @@ window.DASH = (function () {
   var END = new Date(2026, 5, 20);            // 20 июн 2026 (ученик поправит)
   var START = new Date(END.getTime() - (PERIOD_DAYS - 1) * 86400000);
 
-  /* ── ЛЕСТНИЦА ПРОДУКТОВ (ученик меняет имена/цены) ────────────────────── */
+  /* ── ЛЕСТНИЦА ПРОДУКТОВ Qalan по длительности подписки (цены ₸ — плейсхолдер) ── */
   var products = [
-    { code:"П1", name:"Миник",   sub:"трипваер",        price:10,  color:"var(--spend)" },
-    { code:"П2", name:"База",    sub:"курс",            price:20,  color:"var(--ai)"    },
-    { code:"П3", name:"ВИП",     sub:"сигналы/клуб",    price:50,  color:"var(--money)" },
-    { code:"П4", name:"Наставн", sub:"наставничество",  price:900, color:"var(--warn)"  }
+    { code:"П1", name:"Бонус-задачи", sub:"трипваер с квиза", price:2000,  color:"var(--spend)" },
+    { code:"П2", name:"Месяц",        sub:"подписка 1 мес",   price:9900,  color:"var(--ai)"    },
+    { code:"П3", name:"3 месяца",     sub:"подписка 3 мес",   price:24900, color:"var(--money)" },
+    { code:"П4", name:"Год",          sub:"подписка 12 мес",  price:79900, color:"var(--warn)"  }
   ];
 
-  var FX_RUB = 90;        // курс ₽/$ (плейсхолдер)
-  var AOV = 1;            // средний чек на клиента (плейсхолдер; ученик заменит)
+  var FX_USD = 480;       // курс ₸/$ (плейсхолдер; для справочной колонки $)
   var MARGIN = 1;         // маржа продукта (плейсхолдер; напр. 0.7)
   var LTV_K = 1.7;        // коэффициент LTV
+
+  /* имена креативов = метки utm_content ({{ad.name}} из Meta). Системные, читаемые.
+     Это и есть ось атрибуции «продажа → креатив». */
+  var FORMATS = ["UGC","Reels","Карусель","Статика"];
+  var CREATIVE_DEFS = [];
+  (function () {
+    var topics = ["drobi","geometry","uravneniya","procenty","logika","tabl_umn","zadacha_text","stepeni"];
+    for (var k = 0; k < 24; k++) {
+      CREATIVE_DEFS.push({ topic: topics[k % topics.length], klass: [4,5,6,7,8,9][k % 6], fmt: FORMATS[k % 4], idx: k });
+    }
+  })();
+  var FMT_SLUG = { "UGC":"ugc", "Reels":"reels", "Карусель":"carousel", "Статика":"static" };
+  var CREATIVE_NAMES = CREATIVE_DEFS.map(function (c) {
+    return c.topic + "_" + c.klass + "kl_" + (FMT_SLUG[c.fmt] || "ad") + "_v" + ((c.idx % 3) + 1);
+  });
 
   /* ── ЖУРНАЛ ОПЛАТ payments — ручной слой выручки (ТОЛЬКО ТЕСТ) ─────────
      Никаких реальных имён/сумм. Только «клиент-тест-N» / «@test_N».
      Это источник дохода: income, ROAS, когорты «по оплате» оживают отсюда. */
-  var PAY_GEO = ["КЗ","РБ","УКР","Польша"];
+  var PAY_GEO = ["Алматы","Астана","Шымкент","Караганда"];
   var payments = (function () {
     var rows = [], n = 12, i;
     // равномерно по периоду, детерминированно (без Math.random)
@@ -107,7 +131,7 @@ window.DASH = (function () {
       var pdate = new Date(START.getTime() + offDays * 86400000);
       var subBack = 14 + (i % 5) * 7;                                  // дата захода раньше
       var sdate = new Date(pdate.getTime() - subBack * 86400000);
-      var usd = prod.price;
+      var amount = prod.price;          // сумма в ₸ (первичная валюта) → идёт в выручку
       rows.push({
         date: iso(pdate),
         igNick: "клиент-тест-" + (i + 1),
@@ -115,11 +139,11 @@ window.DASH = (function () {
         subDate: iso(sdate),
         days: Math.round((pdate - sdate) / 86400000),
         geo: PAY_GEO[i % PAY_GEO.length],
-        creative: "Крео-" + pad((i % 24) + 1),
+        creative: CREATIVE_NAMES[i % CREATIVE_NAMES.length],   // = utm_content из квиза/CRM
         product: prod.code,
-        rub: Math.round(usd * FX_RUB),
-        usd: usd,
-        debt: (i % 6 === 0 ? usd : 0)   // у части — висит долг
+        amount: amount,                          // ₸
+        alt: Math.round(amount / FX_USD),        // справочно в $
+        debt: (i % 6 === 0 ? amount : 0)         // у части висит долг
       });
     }
     return rows;
@@ -128,7 +152,7 @@ window.DASH = (function () {
 
   /* индекс дохода по дате (день без оплат = 0) */
   var incomeByDate = {};
-  payments.forEach(function (p) { incomeByDate[p.date] = (incomeByDate[p.date] || 0) + p.usd; });
+  payments.forEach(function (p) { incomeByDate[p.date] = (incomeByDate[p.date] || 0) + p.amount; });
 
   /* ── daily: массив дней периода ──────────────────────────────────────── */
   var daily = [];
@@ -155,8 +179,9 @@ window.DASH = (function () {
     totalSpend += d.spend; totalLeads += d.leads;
     totalClicks += d.clicks; totalImpr += d.impressions;
   });
-  var totalIncome = payments.reduce(function (s, p) { return s + p.usd; }, 0);
-  var customers = Math.round(safeDiv(totalIncome, AOV));
+  var totalIncome = payments.reduce(function (s, p) { return s + p.amount; }, 0);
+  var customers = payments.length;            // каждая тест-оплата = клиент (ученик заменит)
+  var AOV = safeDiv(totalIncome, customers);  // средний чек на клиента
 
   var totals = {
     spend: totalSpend, income: totalIncome, leads: totalLeads,
@@ -204,19 +229,18 @@ window.DASH = (function () {
     });
   }
 
-  // geo: 7 регионов (страны ЕС — плейсхолдер; ученик заменит)
-  var geo = buildSlice(["Германия","Польша","Франция","Испания","Италия","Нидерланды","Австрия"]);
+  // geo: 7 городов Казахстана (плейсхолдер; ученик заменит)
+  var geo = buildSlice(["Алматы","Астана","Шымкент","Караганда","Актобе","Тараз","Павлодар"]);
 
-  // segments: РОВНО 4 (плейсхолдер под инфобиз)
-  var segments = buildSlice(["Новички","Трейдеры","Ищут доп. доход","Хотят пассивный доход"]);
+  // segments: РОВНО 4 — по классу ребёнка (плейсхолдер; ученик заменит)
+  var segments = buildSlice(["1–4 класс","5–7 класс","8–9 класс","10–11 класс"]);
 
-  // creatives: РОВНО 24 (имена-заглушки + формат по кругу)
-  var FORMATS = ["UGC","Reels","Карусель","Статика"];
+  // creatives: РОВНО 24 (имена = метки utm_content, формат по кругу)
   var creativeNames = [];
   for (var ci = 0; ci < 24; ci++) {
     var launch = new Date(START.getTime() + Math.round((PERIOD_DAYS - 20) * ci / 24) * 86400000);
     creativeNames.push({
-      name: "Крео-" + pad(ci + 1),
+      name: CREATIVE_NAMES[ci],
       format: FORMATS[ci % 4],
       launch: iso(launch),
       launchLabel: ruShort(launch),
@@ -354,33 +378,33 @@ window.DASH = (function () {
   // цикл сделки: ближайшее окно, где payback ≈ 100% бенча (в шаблоне ≈ 2 мес)
   var dealCycleMonths = 2;
 
-  /* ── funnel: Клики → Лиды → Вебинар → Клиенты ────────────────────────── */
-  var webinar = Math.round(totalLeads * 0.30);
+  /* ── funnel Qalan: Клики → Заявки(квиз) → Дозвон менеджера → Оплаты ───── */
+  var dozvon = Math.round(totalLeads * 0.30);   // менеджер дозвонился до заявки
   var funnel = {
     steps: [
-      { name: "Клики",   value: totalClicks, cost: safeDiv(totalSpend, totalClicks) },
-      { name: "Лиды",    value: totalLeads,  cost: safeDiv(totalSpend, totalLeads) },
-      { name: "Вебинар", value: webinar,     cost: safeDiv(totalSpend, webinar) },
-      { name: "Клиенты", value: customers,   cost: safeDiv(totalSpend, customers) }
+      { name: "Клики",  value: totalClicks, cost: safeDiv(totalSpend, totalClicks) },
+      { name: "Заявки", value: totalLeads,  cost: safeDiv(totalSpend, totalLeads) },
+      { name: "Дозвон", value: dozvon,      cost: safeDiv(totalSpend, dozvon) },
+      { name: "Оплаты", value: customers,   cost: safeDiv(totalSpend, customers) }
     ],
     conv: {
       clickLead: safeDiv(totalLeads, totalClicks) * 100,
-      leadWeb: safeDiv(webinar, totalLeads) * 100,
-      webClient: safeDiv(customers, webinar) * 100,
+      leadWeb: safeDiv(dozvon, totalLeads) * 100,
+      webClient: safeDiv(customers, dozvon) * 100,
       leadClient: safeDiv(customers, totalLeads) * 100
     }
   };
 
   /* ── meta ────────────────────────────────────────────────────────────── */
   var meta = {
-    project: "Паша",
+    project: "Qalan",
     period: { start: iso(START), end: iso(END), startLabel: ruShort(START), endLabel: ruShort(END) },
     months: monthly.length,
-    currency: "$", cur: "$",
-    source: "Meta Ads · выгрузка",
-    attribution: "7d click / 1d view",
+    currency: "₸", cur: "₸",
+    source: "Meta Ads → квиз → CRM",
+    attribution: "по utm_content (креатив) из квиза → CRM",
     incomeIsPlaceholder: incomeIsPlaceholder,
-    fxRub: FX_RUB,
+    fxUsd: FX_USD,
     dealCycleMonths: dealCycleMonths,
     aov: AOV, margin: MARGIN
   };

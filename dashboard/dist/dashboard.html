@@ -265,7 +265,7 @@ footer.foot{max-width:1280px;margin:40px auto 0;padding-top:18px;border-top:1px 
   <section class="panel" data-panel="oplaty" hidden></section>
 
   <footer class="foot">
-    <span>Источник: Meta Ads · выгрузка из кабинетов · валюта $ (плейсхолдер)</span>
+    <span>Источник: Meta Ads → квиз → CRM · атрибуция продажи по креативу (utm_content) · валюта ₸ (плейсхолдер)</span>
     <span>Дашборд офлайн · все цифры считаются локально из data.js</span>
   </footer>
 </main>
@@ -288,6 +288,16 @@ footer.foot{max-width:1280px;margin:40px auto 0;padding-top:18px;border-top:1px 
    ad-части из файла income можно оставить заглушкой ($1-набор) — дашборд считает
    что может (расход, CPL, лиды, гео по расходу), а ROAS/когорты оживут с оплатами.
    Несколько месяцев = несколько выгрузок: склеиваются в один daily по датам.
+
+   АТРИБУЦИЯ ПРОДАЖИ → КРЕАТИВУ (воронка Qalan: клик → квиз → менеджер → оплата).
+   Продажа закрывается ОФФЛАЙН (менеджер), поэтому метку креатива тащим по цепочке:
+     1) Meta, объявление → «Параметры URL»:
+        utm_content={{ad.name}}  (имя креатива подставит сама Meta), + ad_id={{ad.id}}
+     2) Квиз-сайт читает utm из URL и кладёт в скрытые поля формы (см. README).
+     3) CRM: заявка приходит с креативом; менеджер закрывает оплату — креатив уже стоит.
+     4) Здесь: payments[].creative = это utm_content. Так оживают лидерборд креативов,
+        ROAS по креативу и «с какого креатива пришла каждая продажа».
+   Имена креативов делай системными/читаемыми — они = метка везде (drobi_5kl_video_v1).
    ЗАПОЛНЕНИЕ = замена массива daily и списков-разрезов. Структуру не трогать.
    ============================================================================ */
 window.DASH = (function () {
@@ -354,23 +364,37 @@ window.DASH = (function () {
   var END = new Date(2026, 5, 20);            // 20 июн 2026 (ученик поправит)
   var START = new Date(END.getTime() - (PERIOD_DAYS - 1) * 86400000);
 
-  /* ── ЛЕСТНИЦА ПРОДУКТОВ (ученик меняет имена/цены) ────────────────────── */
+  /* ── ЛЕСТНИЦА ПРОДУКТОВ Qalan по длительности подписки (цены ₸ — плейсхолдер) ── */
   var products = [
-    { code:"П1", name:"Миник",   sub:"трипваер",        price:10,  color:"var(--spend)" },
-    { code:"П2", name:"База",    sub:"курс",            price:20,  color:"var(--ai)"    },
-    { code:"П3", name:"ВИП",     sub:"сигналы/клуб",    price:50,  color:"var(--money)" },
-    { code:"П4", name:"Наставн", sub:"наставничество",  price:900, color:"var(--warn)"  }
+    { code:"П1", name:"Бонус-задачи", sub:"трипваер с квиза", price:2000,  color:"var(--spend)" },
+    { code:"П2", name:"Месяц",        sub:"подписка 1 мес",   price:9900,  color:"var(--ai)"    },
+    { code:"П3", name:"3 месяца",     sub:"подписка 3 мес",   price:24900, color:"var(--money)" },
+    { code:"П4", name:"Год",          sub:"подписка 12 мес",  price:79900, color:"var(--warn)"  }
   ];
 
-  var FX_RUB = 90;        // курс ₽/$ (плейсхолдер)
-  var AOV = 1;            // средний чек на клиента (плейсхолдер; ученик заменит)
+  var FX_USD = 480;       // курс ₸/$ (плейсхолдер; для справочной колонки $)
   var MARGIN = 1;         // маржа продукта (плейсхолдер; напр. 0.7)
   var LTV_K = 1.7;        // коэффициент LTV
+
+  /* имена креативов = метки utm_content ({{ad.name}} из Meta). Системные, читаемые.
+     Это и есть ось атрибуции «продажа → креатив». */
+  var FORMATS = ["UGC","Reels","Карусель","Статика"];
+  var CREATIVE_DEFS = [];
+  (function () {
+    var topics = ["drobi","geometry","uravneniya","procenty","logika","tabl_umn","zadacha_text","stepeni"];
+    for (var k = 0; k < 24; k++) {
+      CREATIVE_DEFS.push({ topic: topics[k % topics.length], klass: [4,5,6,7,8,9][k % 6], fmt: FORMATS[k % 4], idx: k });
+    }
+  })();
+  var FMT_SLUG = { "UGC":"ugc", "Reels":"reels", "Карусель":"carousel", "Статика":"static" };
+  var CREATIVE_NAMES = CREATIVE_DEFS.map(function (c) {
+    return c.topic + "_" + c.klass + "kl_" + (FMT_SLUG[c.fmt] || "ad") + "_v" + ((c.idx % 3) + 1);
+  });
 
   /* ── ЖУРНАЛ ОПЛАТ payments — ручной слой выручки (ТОЛЬКО ТЕСТ) ─────────
      Никаких реальных имён/сумм. Только «клиент-тест-N» / «@test_N».
      Это источник дохода: income, ROAS, когорты «по оплате» оживают отсюда. */
-  var PAY_GEO = ["КЗ","РБ","УКР","Польша"];
+  var PAY_GEO = ["Алматы","Астана","Шымкент","Караганда"];
   var payments = (function () {
     var rows = [], n = 12, i;
     // равномерно по периоду, детерминированно (без Math.random)
@@ -380,7 +404,7 @@ window.DASH = (function () {
       var pdate = new Date(START.getTime() + offDays * 86400000);
       var subBack = 14 + (i % 5) * 7;                                  // дата захода раньше
       var sdate = new Date(pdate.getTime() - subBack * 86400000);
-      var usd = prod.price;
+      var amount = prod.price;          // сумма в ₸ (первичная валюта) → идёт в выручку
       rows.push({
         date: iso(pdate),
         igNick: "клиент-тест-" + (i + 1),
@@ -388,11 +412,11 @@ window.DASH = (function () {
         subDate: iso(sdate),
         days: Math.round((pdate - sdate) / 86400000),
         geo: PAY_GEO[i % PAY_GEO.length],
-        creative: "Крео-" + pad((i % 24) + 1),
+        creative: CREATIVE_NAMES[i % CREATIVE_NAMES.length],   // = utm_content из квиза/CRM
         product: prod.code,
-        rub: Math.round(usd * FX_RUB),
-        usd: usd,
-        debt: (i % 6 === 0 ? usd : 0)   // у части — висит долг
+        amount: amount,                          // ₸
+        alt: Math.round(amount / FX_USD),        // справочно в $
+        debt: (i % 6 === 0 ? amount : 0)         // у части висит долг
       });
     }
     return rows;
@@ -401,7 +425,7 @@ window.DASH = (function () {
 
   /* индекс дохода по дате (день без оплат = 0) */
   var incomeByDate = {};
-  payments.forEach(function (p) { incomeByDate[p.date] = (incomeByDate[p.date] || 0) + p.usd; });
+  payments.forEach(function (p) { incomeByDate[p.date] = (incomeByDate[p.date] || 0) + p.amount; });
 
   /* ── daily: массив дней периода ──────────────────────────────────────── */
   var daily = [];
@@ -428,8 +452,9 @@ window.DASH = (function () {
     totalSpend += d.spend; totalLeads += d.leads;
     totalClicks += d.clicks; totalImpr += d.impressions;
   });
-  var totalIncome = payments.reduce(function (s, p) { return s + p.usd; }, 0);
-  var customers = Math.round(safeDiv(totalIncome, AOV));
+  var totalIncome = payments.reduce(function (s, p) { return s + p.amount; }, 0);
+  var customers = payments.length;            // каждая тест-оплата = клиент (ученик заменит)
+  var AOV = safeDiv(totalIncome, customers);  // средний чек на клиента
 
   var totals = {
     spend: totalSpend, income: totalIncome, leads: totalLeads,
@@ -477,19 +502,18 @@ window.DASH = (function () {
     });
   }
 
-  // geo: 7 регионов (страны ЕС — плейсхолдер; ученик заменит)
-  var geo = buildSlice(["Германия","Польша","Франция","Испания","Италия","Нидерланды","Австрия"]);
+  // geo: 7 городов Казахстана (плейсхолдер; ученик заменит)
+  var geo = buildSlice(["Алматы","Астана","Шымкент","Караганда","Актобе","Тараз","Павлодар"]);
 
-  // segments: РОВНО 4 (плейсхолдер под инфобиз)
-  var segments = buildSlice(["Новички","Трейдеры","Ищут доп. доход","Хотят пассивный доход"]);
+  // segments: РОВНО 4 — по классу ребёнка (плейсхолдер; ученик заменит)
+  var segments = buildSlice(["1–4 класс","5–7 класс","8–9 класс","10–11 класс"]);
 
-  // creatives: РОВНО 24 (имена-заглушки + формат по кругу)
-  var FORMATS = ["UGC","Reels","Карусель","Статика"];
+  // creatives: РОВНО 24 (имена = метки utm_content, формат по кругу)
   var creativeNames = [];
   for (var ci = 0; ci < 24; ci++) {
     var launch = new Date(START.getTime() + Math.round((PERIOD_DAYS - 20) * ci / 24) * 86400000);
     creativeNames.push({
-      name: "Крео-" + pad(ci + 1),
+      name: CREATIVE_NAMES[ci],
       format: FORMATS[ci % 4],
       launch: iso(launch),
       launchLabel: ruShort(launch),
@@ -627,33 +651,33 @@ window.DASH = (function () {
   // цикл сделки: ближайшее окно, где payback ≈ 100% бенча (в шаблоне ≈ 2 мес)
   var dealCycleMonths = 2;
 
-  /* ── funnel: Клики → Лиды → Вебинар → Клиенты ────────────────────────── */
-  var webinar = Math.round(totalLeads * 0.30);
+  /* ── funnel Qalan: Клики → Заявки(квиз) → Дозвон менеджера → Оплаты ───── */
+  var dozvon = Math.round(totalLeads * 0.30);   // менеджер дозвонился до заявки
   var funnel = {
     steps: [
-      { name: "Клики",   value: totalClicks, cost: safeDiv(totalSpend, totalClicks) },
-      { name: "Лиды",    value: totalLeads,  cost: safeDiv(totalSpend, totalLeads) },
-      { name: "Вебинар", value: webinar,     cost: safeDiv(totalSpend, webinar) },
-      { name: "Клиенты", value: customers,   cost: safeDiv(totalSpend, customers) }
+      { name: "Клики",  value: totalClicks, cost: safeDiv(totalSpend, totalClicks) },
+      { name: "Заявки", value: totalLeads,  cost: safeDiv(totalSpend, totalLeads) },
+      { name: "Дозвон", value: dozvon,      cost: safeDiv(totalSpend, dozvon) },
+      { name: "Оплаты", value: customers,   cost: safeDiv(totalSpend, customers) }
     ],
     conv: {
       clickLead: safeDiv(totalLeads, totalClicks) * 100,
-      leadWeb: safeDiv(webinar, totalLeads) * 100,
-      webClient: safeDiv(customers, webinar) * 100,
+      leadWeb: safeDiv(dozvon, totalLeads) * 100,
+      webClient: safeDiv(customers, dozvon) * 100,
       leadClient: safeDiv(customers, totalLeads) * 100
     }
   };
 
   /* ── meta ────────────────────────────────────────────────────────────── */
   var meta = {
-    project: "Паша",
+    project: "Qalan",
     period: { start: iso(START), end: iso(END), startLabel: ruShort(START), endLabel: ruShort(END) },
     months: monthly.length,
-    currency: "$", cur: "$",
-    source: "Meta Ads · выгрузка",
-    attribution: "7d click / 1d view",
+    currency: "₸", cur: "₸",
+    source: "Meta Ads → квиз → CRM",
+    attribution: "по utm_content (креатив) из квиза → CRM",
     incomeIsPlaceholder: incomeIsPlaceholder,
-    fxRub: FX_RUB,
+    fxUsd: FX_USD,
     dealCycleMonths: dealCycleMonths,
     aov: AOV, margin: MARGIN
   };
@@ -724,11 +748,14 @@ window.CH = (function () {
     if (a >= 1e3) return ru(n / 1e3, 1).replace(/,0$/, "") + "k";
     return ru(n, 0);
   }
-  function usd(n, d){ return "$" + ru(n, d); }
-  function usdC(n){ return "$" + compact(n); }
+  var CUR = "$";                          // символ валюты (ui.js ставит из DASH.meta.cur)
+  function setCur(s){ CUR = s || "$"; }
+  // $ — префиксом, прочие валюты (₸/₽/€) — суффиксом, как принято локально
+  function usd(n, d){ return CUR === "$" ? "$" + ru(n, d) : ru(n, d) + " " + CUR; }
+  function usdC(n){ return CUR === "$" ? "$" + compact(n) : compact(n) + " " + CUR; }
   function pct(n, d){ if(n==null||!isFinite(n))return "—"; return ru(n, d==null?1:d) + "%"; }
   function x(n){ if(n==null||!isFinite(n))return "—"; return ru(n, 2) + "×"; }
-  var fmt = { ru:ru, compact:compact, usd:usd, usdC:usdC, pct:pct, x:x };
+  var fmt = { ru:ru, compact:compact, usd:usd, usdC:usdC, pct:pct, x:x, setCur:setCur };
 
   function svg(w, h, inner, extra) {
     return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" ' +
@@ -963,7 +990,7 @@ window.UI = (function () {
     { id:"obzor",   name:"Обзор",    h1:"Аналитика платного трафика",
       intro:"Главная сводка за период: сколько потратил, сколько лидов и денег пришло, окупается реклама или нет." },
     { id:"voronka", name:"Воронка",  h1:"Воронка · путь клиента",
-      intro:"Путь клиента по шагам — клик → лид → клиент: где и сколько людей отваливается и почём обходится каждый шаг." },
+      intro:"Путь клиента: клик → заявка на квизе → дозвон менеджера → оплата. Где и сколько отваливается и почём каждый шаг." },
     { id:"geo",     name:"Гео",      h1:"География · окупаемость по странам",
       intro:"Окупаемость по странам: где реклама в плюс и надо лить, а где сливает бюджет и надо резать." },
     { id:"kogorty", name:"Когорты",  h1:"Когорты по месяцам · окупаемость",
@@ -1209,10 +1236,10 @@ window.UI = (function () {
     }).join("");
 
     var convCards = [
-      ["Клик → Лид", F.pct(fn.conv.clickLead,1)],
-      ["Лид → Вебинар", F.pct(fn.conv.leadWeb,1)],
-      ["Вебинар → Клиент", F.pct(fn.conv.webClient,1)],
-      ["Лид → Клиент", F.pct(fn.conv.leadClient,1)]
+      ["Клик → Заявка", F.pct(fn.conv.clickLead,1)],
+      ["Заявка → Дозвон", F.pct(fn.conv.leadWeb,1)],
+      ["Дозвон → Оплата", F.pct(fn.conv.webClient,1)],
+      ["Заявка → Оплата", F.pct(fn.conv.leadClient,1)]
     ].map(function(c){ return '<div class="card kpi"><div class="kpi-label">'+c[0]+'</div><div class="kpi-val">'+c[1]+'</div></div>'; }).join("");
 
     var segRows = D.segments.map(function(s){
@@ -1228,7 +1255,7 @@ window.UI = (function () {
     ].map(function(c){ return '<div class="card kpi"><div class="kpi-label">'+c[0]+'</div><div class="kpi-val">'+c[1]+'</div></div>'; }).join("");
 
     return panelHead("voronka")+
-      '<div class="section-head"><h2>Ступени воронки</h2><span class="hint">клик → лид → вебинар → клиент</span></div>'+
+      '<div class="section-head"><h2>Ступени воронки</h2><span class="hint">клик → заявка (квиз) → дозвон менеджера → оплата</span></div>'+
       '<div class="funnel-steps">'+steps+'</div>'+
       '<div class="card" style="margin-top:14px"><div class="card-title">Воронка</div><div class="chart-box">'+CH.funnel({steps:fn.steps, h:200})+'</div></div>'+
       '<div class="section-head"><h2>Конверсии между шагами</h2></div><div class="grid grid-4">'+convCards+'</div>'+
@@ -1482,7 +1509,7 @@ window.UI = (function () {
 
     return panelHead("kreativy")+
       '<div class="card"><div class="card-title">CTR/CPL × ROAS (размер = расход)</div><div class="chart-box">'+sc+'</div></div>'+
-      '<div class="section-head"><h2>Лидерборд креативов</h2></div>'+
+      '<div class="section-head"><h2>Лидерборд креативов</h2><span class="hint">ROI/выручка по креативу — из метки utm_content (квиз → CRM)</span></div>'+
       '<div class="tbl-wrap scroll"><table id="tblCre"><thead><tr><th class="l">Креатив</th><th class="l">Формат</th><th class="l">Запуск</th><th>Расход</th><th>Лиды</th><th>CPL</th><th>Выручка</th><th>ROI</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
       '<div class="section-head"><h2>Разрез по форматам</h2></div>'+
       '<div class="tbl-wrap"><table id="tblFmt"><thead><tr><th class="l">Формат</th><th>Кол-во</th><th>Расход</th><th>Выручка</th><th>ROAS</th></tr></thead><tbody>'+fmtRows+'</tbody></table></div>';
@@ -1492,8 +1519,9 @@ window.UI = (function () {
   var prodByCode = {};
   function renderOplaty() {
     D.products.forEach(function(p){ prodByCode[p.code]=p; });
+    var cur = D.meta.cur;
     var P = D.payments;
-    var sum = P.reduce(function(s,p){return s+p.usd;},0);
+    var sum = P.reduce(function(s,p){return s+p.amount;},0);
     var debt = P.reduce(function(s,p){return s+p.debt;},0);
     var debtN = P.filter(function(p){return p.debt>0;}).length;
     var summary = '<div class="card" style="margin-bottom:14px"><div class="card-title">Сводка</div>'+
@@ -1513,14 +1541,14 @@ window.UI = (function () {
         '<td class="l sticky-col">'+esc(p.date)+'</td><td class="l">'+esc(p.igNick)+'</td><td class="l">'+esc(p.tgNick)+'</td>'+
         '<td class="l">'+esc(p.subDate)+'</td><td>'+F.ru(p.days,0)+'</td><td class="l">'+esc(p.geo)+'</td><td class="l">'+esc(p.creative)+'</td>'+
         '<td class="l"><span class="sq" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+pr.color+';margin-right:5px"></span>'+esc(p.product)+'</td>'+
-        '<td>'+F.ru(p.rub,0)+'</td><td>'+F.usd(p.usd,0)+'</td><td class="'+(p.debt>0?"bad":"")+'">'+F.usd(p.debt,0)+'</td></tr>';
+        '<td>'+F.ru(p.amount,0)+'</td><td>$'+F.ru(p.alt,0)+'</td><td class="'+(p.debt>0?"bad":"")+'">'+F.usd(p.debt,0)+'</td></tr>';
     }).join("");
-    var tr=0,tu=0,td=0; P.forEach(function(p){tr+=p.rub;tu+=p.usd;td+=p.debt;});
-    var foot = '<tfoot><tr class="foot-row"><td class="l sticky-col">Итого</td><td class="l"></td><td class="l"></td><td class="l"></td><td></td><td class="l"></td><td class="l"></td><td class="l"></td><td>'+F.ru(tr,0)+'</td><td>'+F.usd(tu,0)+'</td><td class="bad">'+F.usd(td,0)+'</td></tr></tfoot>';
+    var tr=0,tu=0,td=0; P.forEach(function(p){tr+=p.amount;tu+=p.alt;td+=p.debt;});
+    var foot = '<tfoot><tr class="foot-row"><td class="l sticky-col">Итого</td><td class="l"></td><td class="l"></td><td class="l"></td><td></td><td class="l"></td><td class="l"></td><td class="l"></td><td>'+F.ru(tr,0)+'</td><td>$'+F.ru(tu,0)+'</td><td class="bad">'+F.usd(td,0)+'</td></tr></tfoot>';
 
     var table = '<div class="tbl-wrap scroll"><table id="tblPay"><thead><tr>'+
       '<th class="l sticky-col">Дата оплаты</th><th class="l">Ник IG</th><th class="l">Ник TG</th><th class="l">Подписка</th><th>Дни</th>'+
-      '<th class="l">Гео</th><th class="l">С какого креатива</th><th class="l">Тариф</th><th>₽</th><th>$</th><th>Долг</th></tr></thead><tbody>'+rows+'</tbody>'+foot+'</table></div>';
+      '<th class="l">Гео</th><th class="l">С какого креатива</th><th class="l">Тариф</th><th>'+esc(cur)+'</th><th>$</th><th>Долг</th></tr></thead><tbody>'+rows+'</tbody>'+foot+'</table></div>';
 
     var note = '<div class="tab-intro" style="margin-top:12px">Это тестовые строки-пример. Замени их своими оплатами (или подключи CRM) — тогда оживут доход, ROAS и когорты во всех вкладках. Никаких чужих/реальных данных в шаблон не вшито.</div>';
 
@@ -1650,7 +1678,7 @@ window.UI = (function () {
     el("payGeo").addEventListener("change",applyPay);
     el("paySearch").addEventListener("input",applyPay);
     var colsBtn=el("payColsBtn");
-    var COLS=[["Ник IG",1],["Ник TG",2],["Подписка",3],["Дни",4],["Гео",5],["Креатив",6],["₽",8],["Долг",10]];
+    var COLS=[["Ник IG",1],["Ник TG",2],["Подписка",3],["Дни",4],["Гео",5],["Креатив",6],[D.meta.cur,8],["Долг",10]];
     colsBtn.addEventListener("click", function(e){
       e.stopPropagation();
       var ex=colsBtn.parentNode.querySelector(".colpop-menu"); if(ex){ex.remove();return;}
@@ -1665,9 +1693,9 @@ window.UI = (function () {
       document.addEventListener("click",function cl(){ if(menu)menu.remove(); document.removeEventListener("click",cl); });
     });
     el("payCsv").addEventListener("click", function(){
-      var head=["Дата","НикIG","НикTG","Подписка","Дни","Гео","Креатив","Тариф","RUB","USD","Долг"];
+      var head=["Дата","НикIG","НикTG","Подписка","Дни","Гео","Креатив","Тариф","Сумма_"+D.meta.cur,"USD","Долг"];
       var lines=[head.join(";")];
-      D.payments.forEach(function(p){ lines.push([p.date,p.igNick,p.tgNick,p.subDate,p.days,p.geo,p.creative,p.product,p.rub,p.usd,p.debt].join(";")); });
+      D.payments.forEach(function(p){ lines.push([p.date,p.igNick,p.tgNick,p.subDate,p.days,p.geo,p.creative,p.product,p.amount,p.alt,p.debt].join(";")); });
       var blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
       var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="payments.csv"; a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);},500);
@@ -1765,6 +1793,7 @@ window.UI = (function () {
 
   /* ── boot ────────────────────────────────────────────────────────────── */
   function boot() {
+    if (CH.fmt.setCur) CH.fmt.setCur(D.meta.cur);   // валюта (₸/$/₽) во всех форматтерах
     splash();
     injectThemeBtn();
     injectProjectDropdown();
