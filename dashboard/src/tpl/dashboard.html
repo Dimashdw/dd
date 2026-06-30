@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аналитика платного трафика · дашборд</title>
+<!-- анти-флэш: ставим тёмную тему ДО загрузки стилей, если сохранена -->
+<script>
+(function(){ try{ if(localStorage.getItem('wowtheme')==='dark'){ document.documentElement.setAttribute('data-theme','dark'); } }catch(e){} })();
+</script>
+<link rel="stylesheet" href="../theme.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-row">
+    <div class="brand">Проект</div>
+    <div class="head-main">
+      <h1 id="topTitle">Аналитика платного трафика</h1>
+      <div class="subtitle" id="subtitle">…</div>
+    </div>
+    <div class="head-side">
+      <nav class="tabs"></nav>
+      <span class="pill" id="dealPill"><span class="dot"></span>цикл сделки</span>
+      <span class="pill status"><span class="dot"></span>выгрузка из кабинетов · не обновлено</span>
+      <button class="icon-btn" id="themeBtn" title="Тема">☾</button>
+    </div>
+  </div>
+  <div class="placeholder-banner" id="banner"></div>
+</header>
+
+<main class="wrap">
+  <section class="panel" data-panel="obzor"></section>
+  <section class="panel" data-panel="voronka" hidden></section>
+  <section class="panel" data-panel="geo" hidden></section>
+  <section class="panel" data-panel="kogorty" hidden></section>
+  <section class="panel" data-panel="kreativy" hidden></section>
+  <section class="panel" data-panel="oplaty" hidden></section>
+
+  <footer class="foot">
+    <span>Источник: Meta Ads · выгрузка из кабинетов · валюта $ (плейсхолдер)</span>
+    <span>Дашборд офлайн · все цифры считаются локально из data.js</span>
+  </footer>
+</main>
+
+<script src="../data.js"></script>
+<script src="../charts.js"></script>
+<script src="../ui.js"></script>
+</body>
+</html>

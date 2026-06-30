@@ -1,0 +1,225 @@
+/* theme.css — дизайн-токены. :root = СВЕТЛАЯ тема (по умолчанию), [data-theme="dark"] = тёмная. */
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#F0F1F4; --surface-3:#E4E6EC;
+  --border:#DEE0E6; --border-soft:#EBECF0; --text:#16181F; --muted:#5C6170; --faint:#9097A3;
+  --accent:#6A4DD4; --accent-weak:rgba(106,77,212,.12);
+  --money:#0E9E6E; --money-weak:rgba(14,158,110,.12);
+  --spend:#7A828F; --ai:#2E84DB; --danger:#E5484D; --warn:#B5750C; --chart-ghost:#E9EBF0;
+}
+:root[data-theme="dark"]{
+  --bg:#0A0A0B; --surface:#141417; --surface-2:#1B1B20; --surface-3:#232329;
+  --border:#2A2A31; --border-soft:#1F1F25; --text:#EDEDF0; --muted:#A2A2AC; --faint:#8C8C96;
+  --accent:#7B68EE; --accent-weak:rgba(123,104,238,.14);
+  --money:#3DDC97; --money-weak:rgba(61,220,151,.14);
+  --spend:#C2C6D0; --ai:#4FA6FF; --danger:#FF6B6B; --warn:#FFB23E; --chart-ghost:#232329;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,"SF Pro Display","Segoe UI",Inter,Roboto,Arial,sans-serif;
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+.num,table td,table th,.kpi-val,.csum-val{font-variant-numeric:tabular-nums}
+a{color:inherit}
+button{font-family:inherit}
+
+.wrap{max-width:1280px;margin:0 auto;padding:0 22px 60px}
+
+/* ── Шапка ─────────────────────────────────────────── */
+.top{
+  position:sticky;top:0;z-index:40;background:var(--bg);
+  border-bottom:1px solid var(--border);
+  padding:14px 22px 12px;margin-bottom:0;
+}
+.top-row{max-width:1280px;margin:0 auto;display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;position:relative;
+  padding:7px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface);white-space:nowrap}
+.brand .heart{color:var(--money)}
+.brand .caret{color:var(--faint);font-size:11px}
+.brand-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:190px;background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;padding:6px;z-index:60;box-shadow:0 8px 28px rgba(0,0,0,.18)}
+.brand-menu button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);
+  padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+.brand-menu button:hover{background:var(--surface-2)}
+.brand-menu .sep{height:1px;background:var(--border-soft);margin:5px 2px}
+
+.head-main{flex:1;min-width:240px}
+.head-main h1{margin:2px 0 4px;font-size:22px;font-weight:650;letter-spacing:-.01em}
+.subtitle{color:var(--muted);font-size:13px}
+.subtitle b{color:var(--text);font-weight:600}
+
+.head-side{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.tabs{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:4px;flex-wrap:wrap}
+.tabs button{background:none;border:0;color:var(--muted);padding:7px 12px;border-radius:9px;cursor:pointer;font-size:13px;font-weight:500}
+.tabs button:hover{color:var(--text)}
+.tabs button.on{background:var(--accent);color:#fff}
+:root[data-theme="dark"] .tabs button.on{color:#fff}
+
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);
+  border-radius:999px;padding:5px 11px;font-size:12px;color:var(--muted);white-space:nowrap}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--money)}
+.pill.status .dot{background:var(--faint)}
+.icon-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);width:34px;height:34px;
+  border-radius:10px;cursor:pointer;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+
+/* плашка "доход не залит" */
+.placeholder-banner{max-width:1280px;margin:10px auto 0;display:flex;align-items:center;gap:8px;
+  border:1px solid var(--warn);background:transparent;color:var(--warn);
+  border-radius:10px;padding:8px 12px;font-size:12.5px;opacity:.92}
+.placeholder-banner .pb-ico{opacity:.8}
+
+/* интро-строка вкладки */
+.tab-intro{color:var(--muted);font-size:14.5px;margin:2px 0 18px}
+
+/* ── Сетки / карточки ─────────────────────────────── */
+.section-head{display:flex;align-items:baseline;justify-content:space-between;margin:26px 0 12px;gap:12px}
+.section-head h2{font-size:15px;font-weight:600;margin:0}
+.section-head .hint{color:var(--faint);font-size:12px}
+
+.grid{display:grid;gap:14px}
+.grid-6{grid-template-columns:repeat(6,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:1080px){.grid-6{grid-template-columns:repeat(3,1fr)}.grid-4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.grid-6,.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+.card.pad-lg{padding:20px}
+.card-title{font-size:12.5px;color:var(--muted);margin:0 0 10px;font-weight:500}
+
+.kpi{display:flex;flex-direction:column;gap:6px}
+.kpi-label{font-size:12px;color:var(--muted)}
+.kpi-val{font-size:26px;font-weight:650;letter-spacing:-.02em;color:var(--text)}
+.kpi-foot{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--faint)}
+.delta.up{color:var(--money)} .delta.down{color:var(--danger)} .delta.flat{color:var(--faint)}
+.kpi-spark{margin-top:2px}
+
+/* светофор предельной цены */
+.be-card{display:flex;flex-direction:column;gap:4px}
+.be-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.be-big{font-size:26px;font-weight:650;letter-spacing:-.02em}
+.be-fact{font-size:13px;color:var(--muted)}
+.be-card.good{background:var(--money-weak);border-color:var(--money)}
+.be-card.bad{background:rgba(229,72,77,.10);border-color:var(--danger)}
+.be-card.bad .be-big{color:var(--danger)}
+.be-note{font-size:12px;color:var(--muted)}
+
+/* ── Таблицы ─────────────────────────────────────── */
+.tbl-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
+.tbl-wrap.scroll{max-height:430px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+thead th{position:sticky;top:0;background:var(--surface-2);z-index:2;text-align:right;
+  padding:9px 12px;font-weight:600;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
+  border-bottom:1px solid var(--border);cursor:default;white-space:nowrap}
+thead th.sortable{cursor:pointer;user-select:none}
+thead th .arr{color:var(--faint);font-size:10px;margin-left:3px}
+tbody td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--border-soft);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.l,th.l{text-align:left}
+tbody tr:hover{background:var(--surface-2)}
+.sticky-col{position:sticky;left:0;background:var(--surface);z-index:1;text-align:left;font-weight:500}
+thead th.sticky-col{z-index:3;background:var(--surface-2)}
+tbody tr:hover .sticky-col{background:var(--surface-2)}
+tfoot td{padding:9px 12px;text-align:right;font-weight:650;border-top:2px solid var(--border);background:var(--surface-2)}
+tfoot td.l{text-align:left}
+tfoot .sticky-col{background:var(--surface-2)}
+.bad{color:var(--danger)}
+.good{color:var(--money)}
+.muted-cell{color:var(--faint);font-style:italic}
+
+/* стэк-полоска в "Всего $" */
+.stackbar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:4px;background:var(--surface-3)}
+.stackbar span{display:block;height:100%}
+.bar-cell{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.bar-track{flex:1;height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden;min-width:40px;max-width:120px}
+.bar-fill{height:100%;background:var(--money);border-radius:3px}
+
+/* ── Воронка ступени ─────────────────────────────── */
+.funnel-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:680px){.funnel-steps{grid-template-columns:1fr}}
+.fstep{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px}
+.fstep .fs-name{font-size:12px;color:var(--muted)}
+.fstep .fs-val{font-size:22px;font-weight:650;margin:4px 0}
+.fstep .fs-meta{font-size:12px;color:var(--faint)}
+
+/* ── Когорты ─────────────────────────────────────── */
+.csum{display:grid;grid-template-columns:repeat(7,1fr);gap:12px}
+@media(max-width:1080px){.csum{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:680px){.csum{grid-template-columns:repeat(2,1fr)}}
+.csum-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px}
+.csum-label{font-size:11.5px;color:var(--muted)}
+.csum-val{font-size:20px;font-weight:650;margin-top:5px;letter-spacing:-.01em}
+.csum-sub{font-size:11px;color:var(--faint);margin-top:3px}
+
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0}
+.subtabs{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:3px}
+.subtabs button{background:none;border:0;color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12.5px}
+.subtabs button.on{background:var(--accent);color:#fff}
+select,.btn{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:9px;
+  padding:6px 10px;font-size:12.5px;cursor:pointer}
+.btn:hover{background:var(--surface-2)}
+.spacer{flex:1}
+
+.seg-toggle{display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden}
+.seg-toggle button{background:var(--surface);border:0;color:var(--muted);padding:6px 14px;cursor:pointer;font-size:12.5px}
+.seg-toggle button.on{background:var(--accent);color:#fff}
+
+.ladder-legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 4px}
+.ladder-legend .li{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+.ladder-legend .sq{width:11px;height:11px;border-radius:3px}
+.ladder-legend b{color:var(--text);font-weight:600}
+
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+.legend .li{display:flex;align-items:center;gap:6px}
+.legend .sq{width:10px;height:10px;border-radius:3px}
+
+.colpop{position:relative;display:inline-block}
+.colpop-menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:8px;z-index:30;min-width:160px;box-shadow:0 8px 28px rgba(0,0,0,.18)}
+.colpop-menu label{display:flex;align-items:center;gap:8px;padding:5px 6px;font-size:12.5px;cursor:pointer;border-radius:6px}
+.colpop-menu label:hover{background:var(--surface-2)}
+
+.col-hidden{display:none}
+.prod-hidden{display:none}
+
+/* ── Инсайты ─────────────────────────────────────── */
+.insights{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:1080px){.insights{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.insights{grid-template-columns:1fr}}
+.insight{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px}
+.insight .ic{font-size:18px}
+.insight .ti{font-weight:600;margin:6px 0 5px;font-size:13.5px}
+.insight .tx{color:var(--muted);font-size:12.5px}
+
+/* hero блок */
+.hero-stats{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px}
+.hero-stat .hs-l{font-size:12px;color:var(--muted)}
+.hero-stat .hs-v{font-size:20px;font-weight:650;margin-top:3px}
+
+details.daylog{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:0;overflow:hidden}
+details.daylog>summary{cursor:pointer;padding:14px 16px;font-size:13px;color:var(--muted);list-style:none;font-weight:500}
+details.daylog>summary::-webkit-details-marker{display:none}
+details.daylog>summary b{color:var(--text)}
+details.daylog .tbl-wrap{border:0;border-top:1px solid var(--border);border-radius:0}
+
+footer.foot{max-width:1280px;margin:40px auto 0;padding-top:18px;border-top:1px solid var(--border);
+  color:var(--faint);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+.panel[hidden]{display:none}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface-3);color:var(--text);
+  border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:200;opacity:0;
+  transition:opacity .2s, transform .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+/* интро-заставка */
+#splash{position:fixed;inset:0;z-index:9999;background:#08080A;display:flex;align-items:center;justify-content:center}
+#splash canvas{display:block;width:100%;height:100%}
+#splash .hint{position:absolute;left:0;right:0;bottom:13%;text-align:center;color:#7d7d86;font-size:13px;letter-spacing:.04em;animation:blink 1.15s ease-in-out infinite;pointer-events:none}
+@keyframes blink{0%,100%{opacity:.28}50%{opacity:1}}
+
+.chart-box{width:100%;overflow:visible}
+.chart-box svg{display:block;width:100%;height:auto}
