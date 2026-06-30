@@ -281,7 +281,8 @@ window.DASH = (function () {
     var list = creatives.filter(function (c) { return c.format === f; });
     var sp = list.reduce(function (s, c) { return s + c.spend; }, 0);
     var rv = list.reduce(function (s, c) { return s + c.revenue; }, 0);
-    return { name: f, count: list.length, spend: sp, revenue: rv, roas: safeDiv(rv, sp) };
+    var ld = list.reduce(function (s, c) { return s + (c.leads || 0); }, 0);
+    return { name: f, count: list.length, spend: sp, revenue: rv, leadsSum: ld, roas: safeDiv(rv, sp) };
   });
 
   /* ── monthly: группировка daily по месяцам ───────────────────────────── */

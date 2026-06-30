@@ -174,16 +174,20 @@ window.UI = (function () {
     var incSpark = CH.sparkline(weeks("income"), {color:CH.C.MONEY, w:120, h:30});
     var spSpark  = CH.sparkline(weeks("spend"),  {color:CH.C.SPEND, w:120, h:30});
     var dInc = halfDelta("income"), dSp = halfDelta("spend");
+    var ph = m.incomeIsPlaceholder;   // выручка ещё не залита → денежные KPI = «—»
     var profitCls = t.profit>=0 ? "good" : "bad";
     var profitTxt = (t.profit>=0?"":"−")+F.usd(Math.abs(t.profit),0);
+    var dash = '<span style="color:var(--faint)">—</span>';
 
     var kpis = [
-      metric({label:"Доход (касса)", value:F.usd(t.income,0), delta:dInc.txt, deltaDir:dInc.dir, spark:incSpark}),
+      ph ? metric({label:"Доход (касса)", value:dash, delta:"не залит", deltaDir:"flat"})
+         : metric({label:"Доход (касса)", value:F.usd(t.income,0), delta:dInc.txt, deltaDir:dInc.dir, spark:incSpark}),
       metric({label:"Расход", value:F.usd(t.spend,0), delta:dSp.txt, deltaDir:dSp.dir, spark:spSpark}),
-      metric({label:"Прибыль", value:'<span class="'+profitCls+'">'+profitTxt+'</span>'}),
-      metric({label:"ROAS", value:F.x(dv.roas)}),
+      ph ? metric({label:"Прибыль", value:dash})
+         : metric({label:"Прибыль", value:'<span class="'+profitCls+'">'+profitTxt+'</span>'}),
+      ph ? metric({label:"ROAS", value:dash}) : metric({label:"ROAS", value:F.x(dv.roas)}),
       metric({label:"Лиды", value:F.ru(t.leads,0)}),
-      metric({label:"Клиенты", value:F.ru(t.customers,0)})
+      ph ? metric({label:"Клиенты", value:dash}) : metric({label:"Клиенты", value:F.ru(t.customers,0)})
     ].join("");
 
     // светофор предельной цены
@@ -202,45 +206,50 @@ window.UI = (function () {
         '<div class="be-note">выше этой цены лид убыточен</div></div>';
     }
 
-    // дневной журнал
+    // дневной журнал (доход/прибыль/ROAS = «—», пока выручка не залита)
+    var dc = '<span style="color:var(--faint)">—</span>';
     var rowsHtml = D.daily.slice().reverse().map(function(d){
       var prof = d.income - d.spend, roas = S(d.income, d.spend);
       var pc = prof>=0?"good":"bad", pt = (prof>=0?"+":"−")+F.usd(Math.abs(prof),0);
+      var incC = ph?dc:F.usd(d.income,0), prC = ph?dc:'<span class="'+pc+'">'+pt+'</span>', roC = ph?dc:'<span class="'+(roas<1?"bad":"")+'">'+F.x(roas)+'</span>';
       return '<tr><td class="l">'+esc(d.label)+'</td><td>'+F.usd(d.spend,0)+'</td><td>'+F.ru(d.leads,0)+
-        '</td><td>'+F.usd(S(d.spend,d.leads),2)+'</td><td>'+F.usd(d.income,0)+
-        '</td><td class="'+pc+'">'+pt+'</td><td class="'+(roas<1?"bad":"")+'">'+F.x(roas)+'</td></tr>';
+        '</td><td>'+F.usd(S(d.spend,d.leads),2)+'</td><td>'+incC+'</td><td>'+prC+'</td><td>'+roC+'</td></tr>';
     }).join("");
     var totProf = t.profit, tpc = totProf>=0?"good":"bad";
+    var sumInc = ph?'<b>'+dc+'</b>':'<b>'+F.usd(t.income,0)+'</b>', sumPr = ph?'<b>'+dc+'</b>':'<b>'+(totProf>=0?"+":"−")+F.usd(Math.abs(totProf),0)+'</b>';
+    var fInc = ph?dc:F.usd(t.income,0), fPr = ph?dc:'<span class="'+tpc+'">'+(totProf>=0?"+":"−")+F.usd(Math.abs(totProf),0)+'</span>', fRo = ph?dc:'<span class="'+(dv.roas<1?"bad":"")+'">'+F.x(dv.roas)+'</span>';
     var daylog =
       '<details class="daylog" open><summary>Журнал по дням — <b>'+D.daily.length+'</b> дней · расход <b>'+F.usd(t.spend,0)+
-      '</b> · доход <b>'+F.usd(t.income,0)+'</b> · прибыль <b>'+(totProf>=0?"+":"−")+F.usd(Math.abs(totProf),0)+'</b></summary>'+
+      '</b> · лиды <b>'+F.ru(t.leads,0)+'</b> · цена лида <b>'+F.usd(dv.cpl,2)+'</b> · доход '+sumInc+'</summary>'+
       '<div class="tbl-wrap scroll"><table><thead><tr><th class="l">Дата</th><th>Расход</th><th>Лиды</th>'+
       '<th>Цена лида</th><th>Доход</th><th>Прибыль</th><th>ROAS</th></tr></thead><tbody>'+rowsHtml+
       '</tbody><tfoot><tr class="foot-row"><td class="l">Итого</td><td>'+F.usd(t.spend,0)+'</td><td>'+F.ru(t.leads,0)+
-      '</td><td>'+F.usd(dv.cpl,2)+'</td><td>'+F.usd(t.income,0)+'</td><td class="'+tpc+'">'+(totProf>=0?"+":"−")+F.usd(Math.abs(totProf),0)+
-      '</td><td class="'+(dv.roas<1?"bad":"")+'">'+F.x(dv.roas)+'</td></tr></tfoot></table></div></details>';
+      '</td><td>'+F.usd(dv.cpl,2)+'</td><td>'+fInc+'</td><td>'+fPr+'</td><td>'+fRo+'</td></tr></tfoot></table></div></details>';
 
-    // столбики по месяцам
-    var gb = CH.groupedBars({ data: D.monthly.map(function(mm){ return {label:mm.label.split(" ")[0], spend:mm.spend, income:mm.income}; }), h:200 });
-    // доход по странам
-    var geoSorted = D.geo.slice().sort(function(a,b){return b.revenue-a.revenue;});
-    var geoBars = CH.bars({ data: geoSorted.map(function(g){ return {label:g.name, value:g.revenue, sub:F.usdC(g.revenue)}; }) });
+    // столбики по месяцам: расход всегда; доход — только когда залит
+    var gb = CH.groupedBars({ data: D.monthly.map(function(mm){ return {label:mm.label.split(" ")[0], spend:mm.spend, income:ph?0:mm.income}; }), h:200 });
+    var gbTitle = ph ? "Расход по месяцам" : "Расход / доход по месяцам";
+    var gbLegend = ph ? legend([{color:CH.C.SPEND,label:"Расход"}]) : legend([{color:CH.C.SPEND,label:"Расход"},{color:CH.C.MONEY,label:"Доход"}]);
+    // по регионам: пока нет выручки — показываем ЗАЯВКИ; потом — доход
+    var geoTitle = ph ? "Заявки по регионам" : "Доход по регионам";
+    var geoSorted = D.geo.slice().sort(function(a,b){ return ph ? b.leads-a.leads : b.revenue-a.revenue; });
+    var geoBars = CH.bars({ data: geoSorted.slice(0,10).map(function(g){
+      return ph ? {label:g.name, value:g.leads, sub:F.ru(g.leads,0)} : {label:g.name, value:g.revenue, sub:F.usdC(g.revenue)}; }) });
 
-    // hero
+    // hero: денежные строки = «—», пока выручка не залита
     var hero =
       '<div class="hero-stats">'+
-      heroStat("Доход", F.usd(t.income,0))+heroStat("Расход", F.usd(t.spend,0))+
-      heroStat("Прибыль", (totProf>=0?"+":"−")+F.usd(Math.abs(totProf),0))+
-      heroStat("ROAS", F.x(dv.roas))+heroStat("Доход в день", F.usd(dv.incomePerDay,1))+'</div>'+
+      heroStat("Расход", F.usd(t.spend,0))+heroStat("Лиды", F.ru(t.leads,0))+heroStat("Цена лида", F.usd(dv.cpl,2))+
+      heroStat("Доход", ph?"—":F.usd(t.income,0))+
+      heroStat("ROAS", ph?"—":F.x(dv.roas))+'</div>'+
       '<div class="chart-box">'+CH.dailyDual({daily:D.daily, h:220})+'</div>'+
-      legend([{color:CH.C.MONEY,label:"Доход"},{color:CH.C.SPEND,label:"Расход"}]);
+      (ph?legend([{color:CH.C.SPEND,label:"Расход"}]):legend([{color:CH.C.MONEY,label:"Доход"},{color:CH.C.SPEND,label:"Расход"}]));
 
     return panelHead("obzor")+
       '<div class="grid grid-6">'+kpis+'</div>'+
       '<div class="grid grid-3" style="margin-top:14px">'+beCard+
-        '<div class="card"><div class="card-title">Расход / доход по месяцам</div><div class="chart-box">'+gb+'</div>'+
-        legend([{color:CH.C.SPEND,label:"Расход"},{color:CH.C.MONEY,label:"Доход"}])+'</div>'+
-        '<div class="card"><div class="card-title">Доход по странам</div><div class="chart-box">'+geoBars+'</div></div>'+
+        '<div class="card"><div class="card-title">'+gbTitle+'</div><div class="chart-box">'+gb+'</div>'+gbLegend+'</div>'+
+        '<div class="card"><div class="card-title">'+geoTitle+'</div><div class="chart-box">'+geoBars+'</div></div>'+
       '</div>'+
       '<div class="section-head"><h2>Расходы и доход по дням · весь период</h2></div>'+daylog+
       '<div class="card pad-lg" style="margin-top:14px"><div class="card-title">Динамика за весь период</div>'+hero+'</div>';
@@ -288,27 +297,46 @@ window.UI = (function () {
 
   /* 03 ГЕО */
   function renderGeo() {
+    var ph = D.meta.incomeIsPlaceholder;
+    var avgCpl = S(D.totals.spend, D.totals.leads);
+    if (ph) {
+      // ад-режим без выручки: Гео | Заявки | Расход | Цена заявки
+      var rows = D.geo.map(function(g){
+        var cheap = g.cpl>0 && g.cpl<=avgCpl;
+        return '<tr><td class="l">'+esc(g.name)+'</td><td>'+F.ru(g.leads,0)+'</td><td>'+F.usd(g.spend,0)+
+          '</td><td class="'+(cheap?"good":(g.cpl>avgCpl?"bad":""))+'">'+F.usd(g.cpl,2)+'</td></tr>';
+      }).join("");
+      var ts=0,tl=0; D.geo.forEach(function(g){ts+=g.spend;tl+=g.leads;});
+      var foot = '<tfoot><tr class="foot-row"><td class="l">Итого</td><td>'+F.ru(tl,0)+'</td><td>'+F.usd(ts,0)+'</td><td>'+F.usd(S(ts,tl),2)+'</td></tr></tfoot>';
+      var bubbles = D.geo.filter(function(g){return g.spend>1;}).map(function(g){
+        return { x:g.cpl, y:g.leads, r:g.spend, label:g.name, good:g.cpl>0&&g.cpl<=avgCpl }; });
+      var sc = CH.scatter({ data:bubbles, xLabel:"Цена заявки →", yLabel:"Заявки ↑", h:280 });
+      var segRows = D.segments.map(function(s){
+        return '<tr><td class="l">'+esc(s.name)+'</td><td>'+F.ru(s.leads,0)+'</td><td>'+F.usd(s.spend,0)+'</td><td>'+F.usd(s.cpl,2)+'</td></tr>';
+      }).join("");
+      return panelHead("geo")+
+        '<div class="section-head"><h2>Заявки и цена заявки по регионам</h2><span class="hint">зелёное — дешевле среднего ('+F.usd(avgCpl,2)+'), красное — дороже</span></div>'+
+        '<div class="tbl-wrap"><table id="tblGeo"><thead><tr><th class="l">Гео</th><th>Заявки</th><th>Расход</th><th>Цена заявки</th></tr></thead><tbody>'+rows+'</tbody>'+foot+'</table></div>'+
+        '<div class="card" style="margin-top:14px"><div class="card-title">Цена заявки × объём (размер пузыря = расход)</div><div class="chart-box">'+sc+'</div></div>'+
+        '<div class="section-head"><h2>Разрез по сегментам</h2><span class="hint">сегменты — заглушка (Meta не даёт класс ребёнка)</span></div>'+
+        '<div class="tbl-wrap"><table id="tblGeoSeg"><thead><tr><th class="l">Сегмент</th><th>Лиды</th><th>Расход</th><th>Цена лида</th></tr></thead><tbody>'+segRows+'</tbody></table></div>';
+    }
     var rows = D.geo.map(function(g){
       var roi = g.roas;
       return '<tr><td class="l">'+esc(g.name)+'</td><td>'+F.ru(g.customers,0)+'</td><td>'+F.usd(g.spend,0)+
         '</td><td>'+F.usd(g.revenue,0)+'</td><td style="background:'+roiColor(roi)+'">'+F.x(roi)+'</td></tr>';
     }).join("");
-    var ts=0,tc=0,trv=0,tcu=0; D.geo.forEach(function(g){ts+=g.spend;trv+=g.revenue;tcu+=g.customers;});
+    var ts=0,trv=0,tcu=0; D.geo.forEach(function(g){ts+=g.spend;trv+=g.revenue;tcu+=g.customers;});
     var foot = '<tfoot><tr class="foot-row"><td class="l">Итого</td><td>'+F.ru(tcu,0)+'</td><td>'+F.usd(ts,0)+'</td><td>'+F.usd(trv,0)+
       '</td><td style="background:'+roiColor(S(trv,ts))+'">'+F.x(S(trv,ts))+'</td></tr></tfoot>';
-
-    var bubbles = D.geo.map(function(g){
-      return { x:g.cpl, y:g.roas, r:g.spend, label:g.name, good:g.roas>=1 };
-    });
+    var bubbles = D.geo.map(function(g){ return { x:g.cpl, y:g.roas, r:g.spend, label:g.name, good:g.roas>=1 }; });
     var sc = CH.scatter({ data:bubbles, xLabel:"CPL →", yLabel:"ROAS ↑", h:280 });
-
     var segRows = D.segments.map(function(s){
       return '<tr><td class="l">'+esc(s.name)+'</td><td>'+F.ru(s.customers,0)+'</td><td>'+F.usd(s.spend,0)+
         '</td><td>'+F.usd(s.revenue,0)+'</td><td style="background:'+roiColor(s.roas)+'">'+F.x(s.roas)+'</td></tr>';
     }).join("");
-
     return panelHead("geo")+
-      '<div class="section-head"><h2>Окупаемость по странам</h2></div>'+
+      '<div class="section-head"><h2>Окупаемость по регионам</h2></div>'+
       '<div class="tbl-wrap"><table id="tblGeo"><thead><tr><th class="l">Гео</th><th>Клиенты</th><th>Расход</th><th>Выручка</th><th>ROI</th></tr></thead><tbody>'+rows+'</tbody>'+foot+'</table></div>'+
       '<div class="card" style="margin-top:14px"><div class="card-title">CPL × ROAS (размер пузыря = расход)</div><div class="chart-box">'+sc+'</div></div>'+
       '<div class="section-head"><h2>Разрез по сегментам</h2></div>'+
@@ -515,26 +543,35 @@ window.UI = (function () {
 
   /* 05 КРЕАТИВЫ */
   function renderKreativy() {
-    var bubbles = D.creatives.map(function(c){ return {x:S(c.spend,c.leads), y:c.roas, r:c.spend, label:c.name, good:c.roas>=1}; });
-    var sc = CH.scatter({ data:bubbles, xLabel:"CPL →", yLabel:"ROAS ↑", h:300 });
-    var maxRev = Math.max.apply(null, D.creatives.map(function(c){return c.revenue;}).concat([1]));
+    var ph = D.meta.incomeIsPlaceholder;
+    var avgCpl = S(D.totals.spend, D.totals.leads);
+    var dc = '<span style="color:var(--faint)">—</span>';
+    // пузыри: без выручки — Цена заявки × Заявки; с выручкой — CPL × ROAS
+    var bubbles = D.creatives.filter(function(c){return c.spend>1;}).map(function(c){
+      return ph ? {x:c.cpl, y:c.leads, r:c.spend, label:c.name, good:c.cpl>0&&c.cpl<=avgCpl}
+                : {x:c.cpl, y:c.roas, r:c.spend, label:c.name, good:c.roas>=1}; });
+    var sc = CH.scatter({ data:bubbles, xLabel:ph?"Цена заявки →":"CPL →", yLabel:ph?"Заявки ↑":"ROAS ↑", h:300 });
     var rows = D.creatives.slice().sort(function(a,b){return b.spend-a.spend;}).map(function(c){
+      var cheap = c.cpl>0 && c.cpl<=avgCpl;
+      var revCell = ph ? dc : '<td><div class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:'+S(c.revenue,Math.max.apply(null,D.creatives.map(function(x){return x.revenue;}).concat([1])))*100+'%"></div></div>'+F.usd(c.revenue,0)+'</div></td>';
+      var roiCell = ph ? '<td>'+dc+'</td>' : '<td style="background:'+roiColor(c.roas)+'">'+F.x(c.roas)+'</td>';
+      var cplCell = '<td class="'+(cheap?"good":(c.cpl>avgCpl?"bad":""))+'">'+F.usd(c.cpl,2)+'</td>';
       return '<tr><td class="l">'+esc(c.name)+'</td><td class="l">'+esc(c.format)+'</td><td class="l">'+esc(c.launchLabel)+'</td>'+
-        '<td>'+F.usd(c.spend,0)+'</td><td>'+F.ru(c.leads,0)+'</td><td>'+F.usd(c.cpl,2)+'</td>'+
-        '<td><div class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:'+S(c.revenue,maxRev)*100+'%"></div></div>'+F.usd(c.revenue,0)+'</div></td>'+
-        '<td style="background:'+roiColor(c.roas)+'">'+F.x(c.roas)+'</td></tr>';
+        '<td>'+F.usd(c.spend,0)+'</td><td>'+F.ru(c.leads,0)+'</td>'+cplCell+
+        (ph?'<td>'+dc+'</td>':revCell)+roiCell+'</tr>';
     }).join("");
     var fmtRows = D.formats.map(function(f){
-      return '<tr><td class="l">'+esc(f.name)+'</td><td>'+F.ru(f.count,0)+'</td><td>'+F.usd(f.spend,0)+
-        '</td><td>'+F.usd(f.revenue,0)+'</td><td style="background:'+roiColor(f.roas)+'">'+F.x(f.roas)+'</td></tr>';
+      return '<tr><td class="l">'+esc(f.name)+'</td><td>'+F.ru(f.count,0)+'</td><td>'+F.usd(f.spend,0)+'</td><td>'+F.ru(f.leadsSum||0,0)+
+        '</td><td>'+(ph?dc:'<span style="background:'+roiColor(f.roas)+'">'+F.x(f.roas)+'</span>')+'</td></tr>';
     }).join("");
-
+    var hint = ph ? 'дешевле среднего CPL ('+F.usd(avgCpl,2)+') — зелёным; выручка/ROI оживут, когда зальёшь оплаты'
+                  : 'ROI/выручка по креативу — из метки utm_content (квиз → CRM)';
     return panelHead("kreativy")+
-      '<div class="card"><div class="card-title">CTR/CPL × ROAS (размер = расход)</div><div class="chart-box">'+sc+'</div></div>'+
-      '<div class="section-head"><h2>Лидерборд креативов</h2><span class="hint">ROI/выручка по креативу — из метки utm_content (квиз → CRM)</span></div>'+
-      '<div class="tbl-wrap scroll"><table id="tblCre"><thead><tr><th class="l">Креатив</th><th class="l">Формат</th><th class="l">Запуск</th><th>Расход</th><th>Лиды</th><th>CPL</th><th>Выручка</th><th>ROI</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+      '<div class="card"><div class="card-title">'+(ph?"Цена заявки × объём (размер = расход)":"CPL × ROAS (размер = расход)")+'</div><div class="chart-box">'+sc+'</div></div>'+
+      '<div class="section-head"><h2>Лидерборд креативов</h2><span class="hint">'+hint+'</span></div>'+
+      '<div class="tbl-wrap scroll"><table id="tblCre"><thead><tr><th class="l">Креатив</th><th class="l">Формат</th><th class="l">Запуск</th><th>Расход</th><th>Заявки</th><th>Цена заявки</th><th>Выручка</th><th>ROI</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
       '<div class="section-head"><h2>Разрез по форматам</h2></div>'+
-      '<div class="tbl-wrap"><table id="tblFmt"><thead><tr><th class="l">Формат</th><th>Кол-во</th><th>Расход</th><th>Выручка</th><th>ROAS</th></tr></thead><tbody>'+fmtRows+'</tbody></table></div>';
+      '<div class="tbl-wrap"><table id="tblFmt"><thead><tr><th class="l">Формат</th><th>Кол-во</th><th>Расход</th><th>Заявки</th><th>ROAS</th></tr></thead><tbody>'+fmtRows+'</tbody></table></div>';
   }
 
   /* 06 ОПЛАТЫ */
